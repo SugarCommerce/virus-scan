@@ -29,10 +29,25 @@ namespace SugarCommerce\VirusScan;
  */
 enum State: string {
 
-	case Clean    = 'clean';
+	/**
+	 * Looked, and found nothing.
+	 */
+	case Clean = 'clean';
+
+	/**
+	 * Looked, and found something.
+	 */
 	case Infected = 'infected';
-	case Unknown  = 'unknown';
-	case Error    = 'error';
+
+	/**
+	 * Has nothing to say either way, and asking again will not change that.
+	 */
+	case Unknown = 'unknown';
+
+	/**
+	 * Could not look; ask again.
+	 */
+	case Error = 'error';
 
 	/**
 	 * Whether this answer settles anything.

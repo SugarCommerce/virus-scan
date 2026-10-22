@@ -51,6 +51,8 @@ final readonly class Panel {
 	private array $scanners;
 
 	/**
+	 * A panel of scanners.
+	 *
 	 * @since 1.0.0
 	 *
 	 * @param Scanner ...$scanners In the order to ask them. Cheapest first:
@@ -117,7 +119,15 @@ final readonly class Panel {
 				return $verdict->from( $scanner->name() );
 			}
 
-			$verdicts[ $scanner->name() ] = $verdict;
+			// Two scanners under one name — two clamds — must not share a
+			// slot: the second one's clean would overwrite the first's error.
+			$name = $scanner->name();
+
+			for ( $n = 2; isset( $verdicts[ $name ] ); $n++ ) {
+				$name = $scanner->name() . '#' . $n;
+			}
+
+			$verdicts[ $name ] = $verdict;
 		}
 
 		return Verdict::combine( $verdicts );

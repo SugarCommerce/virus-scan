@@ -1,6 +1,6 @@
 {
   "name": "sugarcommerce/virus-scan",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Malware scanning for stored uploads: ClamAV over clamd's INSTREAM, a VirusTotal lookup by digest, and a panel that combines them without mistaking an outage for a clean bill of health. Files are read a range at a time, so a two-gigabyte upload never sits in memory.",
   "type": "library",
   "license": "GPL-2.0-or-later",

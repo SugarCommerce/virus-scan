@@ -122,6 +122,22 @@ final class ClamdTest extends TestCase {
 		$this->assertSame( 'Early.Match', $verdict->detail );
 	}
 
+	/**
+	 * clamd said OK and hung up before the stream was finished: that OK is
+	 * about part of the file, so it is not clean.
+	 */
+	public function test_a_clean_answer_before_a_hang_up_is_an_error(): void {
+		[ $ours, $theirs ] = stream_socket_pair( STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP );
+
+		fwrite( $theirs, "stream: OK\0" );
+		fclose( $theirs );
+
+		$clamd   = new Clamd( 'unix:///nowhere', PHP_INT_MAX, 5, static fn () => $ours );
+		$verdict = $clamd->scan( Subject::from_string( str_repeat( 'x', 4 * 1024 * 1024 ) ) );
+
+		$this->assertSame( State::Error, $verdict->state, $verdict->detail );
+	}
+
 	public function test_a_digest_alone_is_nothing_to_stream(): void {
 		$clamd = new Clamd( 'unix:///nowhere', 1000, 1, static fn () => $this->fail( 'Never connects.' ) );
 

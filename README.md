@@ -9,7 +9,7 @@ Scanning an upload looks like one function call. Most of the ways it goes wrong 
 - **An outage reads as a pass.** A scanner that is down, rate-limited or timed out has not said the file is clean. Code that turns "no answer" into "nothing found" serves every upload while the scanner is broken.
 - **"Never seen it" reads as a failure.** A hash lookup knows nothing about a file nobody has uploaded before, which is every new file. Treating that as an error retries for ever; treating it as clean is fine only if something else looked at the bytes.
 - **The digest is a claim.** A hash lookup judges a file by its SHA-256 alone. If that digest came from the uploader's browser, known malware under a made-up digest is a file nobody has "ever seen".
-- **A truncated scan reads as clean.** clamd stops at its `StreamMaxLength` and answers about the part it read.
+- **A truncated scan reads as clean.** clamd stops at its `StreamMaxLength` and answers about the part it read, and by default answers `OK` for anything past `MaxFileSize` or `MaxScanSize`.
 - **Big files end up in memory**, or on a disk the scanner was never meant to touch.
 
 ## Features
@@ -74,7 +74,7 @@ match ( true ) {
 };
 ```
 
-`Clamd::address( $host, $socket )` prefers a unix socket, and gives a bare host clamd's default port. `accepts()` refuses a file over the stream limit, so it is scanned whole or not by clamd at all; the panel then asks only the scanners that can take it, and answers `Panel::NOBODY` when none can.
+`Clamd::address( $host, $socket )` prefers a unix socket, and gives a bare host clamd's default port. `accepts()` refuses a file over the limit, so it is scanned whole or not by clamd at all — give it the smallest of clamd's `StreamMaxLength`, `MaxFileSize` and `MaxScanSize`, or set `AlertExceedsMax yes` in clamd.conf so a file over them is `FOUND` rather than `OK`; the panel then asks only the scanners that can take it, and answers `Panel::NOBODY` when none can.
 
 For a health check:
 

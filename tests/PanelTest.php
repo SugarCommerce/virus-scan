@@ -51,6 +51,17 @@ final class PanelTest extends TestCase {
 
 	/* ─── Panel ────────────────────────────────────────────────────────── */
 
+	/**
+	 * Two clamds share a name: the second one's clean must not overwrite
+	 * the first one's error.
+	 */
+	public function test_two_scanners_of_one_name_are_both_counted(): void {
+		$verdict = ( new Panel( self::scanner( Verdict::error( 'down' ), 'clamav' ), self::scanner( Verdict::clean(), 'clamav' ) ) )->scan( Subject::from_string( 'x' ) );
+
+		$this->assertSame( State::Error, $verdict->state );
+		$this->assertSame( 'clamav: down', $verdict->detail );
+	}
+
 	public function test_infected_from_any_one_wins_and_stops_the_rest(): void {
 		$later = self::scanner( Verdict::clean(), 'b' );
 

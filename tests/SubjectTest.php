@@ -53,6 +53,16 @@ final class SubjectTest extends TestCase {
 		$whole->digest();
 	}
 
+	/**
+	 * A reader that answers with a number is not bytes, however many
+	 * digits it has.
+	 */
+	public function test_a_read_that_is_not_bytes_is_refused(): void {
+		$this->expectException( \RuntimeException::class );
+
+		( new Subject( 3, '', static fn ( int $from, int $to ): int => 123 ) )->read( 0, 2 );
+	}
+
 	public function test_a_short_read_is_refused(): void {
 		$this->expectException( \RuntimeException::class );
 

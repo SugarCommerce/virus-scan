@@ -29,11 +29,17 @@ namespace SugarCommerce\VirusScan;
  * - **A truncated scan reported clean.** clamd stops reading at its
  *   StreamMaxLength and answers about what it read. accepts() refuses
  *   anything longer than the limit it is given, so a file is scanned whole
- *   or not by this scanner at all.
+ *   or not by this scanner at all. clamd's MaxFileSize and MaxScanSize
+ *   cut a scan short too, and by default answer OK for what they skipped:
+ *   set the limit to the smallest of the three, or set AlertExceedsMax
+ *   so clamd answers FOUND (Heuristics.Limits.Exceeded) instead.
  * - **A hang-up taken as an error when clamd had answered.** clamd can
  *   reply and close before the stream ends — a match early in the file,
  *   or the size limit — and the next write fails. What it said, if
- *   anything, outranks the failed write.
+ *   anything, outranks the failed write — unless it said OK: a clean
+ *   answer about a stream that was never finished is not about the file.
+ * - **An endless reply.** A reply is read up to REPLY bytes, so whatever
+ *   answers at the address cannot fill this process's memory.
  *
  * @since 1.0.0
  */
@@ -51,11 +57,20 @@ final readonly class Clamd implements Scanner {
 	public const int PORT = 3310;
 
 	/**
+	 * The most of a reply that is read. clamd's longest is a signature name
+	 * or an error line; anything past this is not clamd.
+	 */
+	public const int REPLY = 64 * 1024;
+
+	/**
+	 * Point at a clamd, with the limit it scans to.
+	 *
 	 * @since 1.0.0
 	 *
 	 * @param string        $address tcp://host:port or unix:///path/clamd.sock.
 	 *                               See address().
-	 * @param int           $limit   clamd's StreamMaxLength. Anything longer
+	 * @param int           $limit   The smallest of clamd's StreamMaxLength,
+	 *                               MaxFileSize and MaxScanSize. Anything longer
 	 *                               would be cut off by clamd, so it is not
 	 *                               accepted.
 	 * @param int           $timeout Seconds to wait on clamd, per read and
@@ -133,9 +148,13 @@ final readonly class Clamd implements Scanner {
 		try {
 			return $this->instream( $stream, $subject );
 		} catch ( \Throwable $e ) {
-			$said = self::answer( (string) @stream_get_contents( $stream ) );
+			$said = self::answer( self::reply( $stream ) );
 
-			return State::Error === $said->state && str_contains( $said->detail, 'without answering' ) ? Verdict::error( $e->getMessage() ) : $said;
+			// Infected, or clamd's own error, is about what it saw. Clean is
+			// not: the stream was never finished, so it was not the file.
+			return State::Clean === $said->state || ( State::Error === $said->state && str_contains( $said->detail, 'without answering' ) )
+				? Verdict::error( $e->getMessage() )
+				: $said;
 		} finally {
 			fclose( $stream );
 		}
@@ -210,7 +229,7 @@ final readonly class Clamd implements Scanner {
 
 		self::write( $stream, pack( 'N', 0 ) );
 
-		return self::answer( (string) stream_get_contents( $stream ) );
+		return self::answer( self::reply( $stream ) );
 	}
 
 	/**
@@ -230,7 +249,7 @@ final readonly class Clamd implements Scanner {
 		try {
 			self::write( $stream, 'z' . $command . "\0" );
 
-			return trim( (string) stream_get_contents( $stream ), "\0\n\r " );
+			return trim( self::reply( $stream ), "\0\n\r " );
 		} catch ( \RuntimeException ) {
 			return '';
 		} finally {
@@ -255,6 +274,21 @@ final readonly class Clamd implements Scanner {
 		stream_set_timeout( $stream, $this->timeout );
 
 		return $stream;
+	}
+
+	/**
+	 * Read clamd's reply, up to REPLY bytes.
+	 *
+	 * @param resource $stream Connection.
+	 *
+	 * @return string '' when there was none, or the read failed.
+	 */
+	private static function reply( $stream ): string {
+		// Silenced: a connection already closed is an empty reply, which
+		// answer() reads as clamd not answering.
+		$reply = @stream_get_contents( $stream, self::REPLY );
+
+		return is_string( $reply ) ? $reply : '';
 	}
 
 	/**

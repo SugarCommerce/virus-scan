@@ -81,6 +81,22 @@ final class VirusTotalTest extends TestCase {
 		$this->assertFalse( VirusTotal::judge( array( 'data' => array( 'attributes' => array( 'last_analysis_stats' => array( 'malicious' => 3 ) ) ) ), 4 )->is_infected() );
 	}
 
+	/**
+	 * Every engine timed out, failed or could not read the type: nobody
+	 * judged it, so it is not clean.
+	 */
+	public function test_an_analysis_no_engine_judged_is_unknown_not_clean(): void {
+		$stats = array( 'malicious' => 0, 'suspicious' => 0, 'undetected' => 0, 'harmless' => 0, 'timeout' => 12, 'type-unsupported' => 60 );
+
+		$this->assertSame( State::Unknown, VirusTotal::judge( array( 'data' => array( 'attributes' => array( 'last_analysis_stats' => $stats ) ) ) )->state );
+		$this->assertSame( State::Clean, VirusTotal::judge( array( 'data' => array( 'attributes' => array( 'last_analysis_stats' => array( 'undetected' => 70 ) ) ) ) )->state );
+		$this->assertSame( State::Unknown, VirusTotal::judge( array( 'data' => array( 'attributes' => array( 'last_analysis_stats' => array( 'undetected' => -5 ) ) ) ) )->state );
+	}
+
+	public function test_a_dump_does_not_show_the_key(): void {
+		$this->assertStringNotContainsString( 'vt-secret', print_r( new VirusTotal( 'vt-secret' ), true ) );
+	}
+
 	public function test_no_analysis_at_all_is_unknown(): void {
 		$this->assertSame( State::Unknown, VirusTotal::judge( array( 'data' => array( 'attributes' => array() ) ) )->state );
 	}

@@ -29,6 +29,8 @@ namespace SugarCommerce\VirusScan;
 final readonly class Verdict {
 
 	/**
+	 * A verdict; made by the named constructors.
+	 *
 	 * @param State  $state  What was said.
 	 * @param string $detail The signature found, or what went wrong.
 	 * @param string $digest Lower-case hex SHA-256 of the bytes judged, or

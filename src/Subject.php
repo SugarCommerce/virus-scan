@@ -47,6 +47,8 @@ final readonly class Subject {
 	public string $sha256;
 
 	/**
+	 * A file of this size, perhaps with a digest, perhaps readable.
+	 *
 	 * @since 1.0.0
 	 *
 	 * @param int           $size   Bytes.
@@ -117,8 +119,8 @@ final readonly class Subject {
 
 			$bytes = '';
 
-			while ( strlen( $bytes ) < $to - $from + 1 && ! feof( $handle ) ) {
-				$chunk = fread( $handle, $to - $from + 1 - strlen( $bytes ) );
+			while ( ( $want = $to - $from + 1 - strlen( $bytes ) ) > 0 && ! feof( $handle ) ) {
+				$chunk = fread( $handle, $want );
 
 				if ( false === $chunk || '' === $chunk ) {
 					break;
@@ -178,7 +180,11 @@ final readonly class Subject {
 			throw new \LogicException( 'This file is known only by its digest; there is nothing to read.' );
 		}
 
-		$bytes = (string) ( $this->read )( $from, $to );
+		$bytes = ( $this->read )( $from, $to );
+
+		if ( ! is_string( $bytes ) ) {
+			throw new \RuntimeException( 'Storage returned something other than bytes.' );
+		}
 
 		if ( strlen( $bytes ) !== $to - $from + 1 ) {
 			throw new \RuntimeException( sprintf( 'Storage returned %d bytes for a read of %d.', strlen( $bytes ), $to - $from + 1 ) );

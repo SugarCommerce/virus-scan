@@ -49,6 +49,8 @@ final readonly class VirusTotal implements Scanner {
 	public const string ENDPOINT = 'https://www.virustotal.com/api/v3/files/';
 
 	/**
+	 * Hold the key, and how many engines must agree.
+	 *
 	 * @since 1.0.0
 	 *
 	 * @param string $key     VirusTotal API key.
@@ -72,6 +74,21 @@ final readonly class VirusTotal implements Scanner {
 	 */
 	public function name(): string {
 		return 'virustotal';
+	}
+
+	/**
+	 * What var_dump() and print_r() show: the settings, with the key redacted.
+	 *
+	 * @since 1.1.0
+	 *
+	 * @return array<string, mixed>
+	 */
+	public function __debugInfo(): array {
+		return array(
+			'key'     => '' === $this->key ? '' : '[redacted]',
+			'engines' => $this->engines,
+			'timeout' => $this->timeout,
+		);
 	}
 
 	/**
@@ -100,7 +117,7 @@ final readonly class VirusTotal implements Scanner {
 
 		return match ( true ) {
 			404 === $response->status => Verdict::unknown( 'VirusTotal has not seen this file' ),
-			$response->ok             => self::judge( (array) ( $response->json() ?? array() ), $this->engines ),
+			$response->ok             => self::judge( is_array( $body = $response->json() ) ? $body : array(), $this->engines ),
 			default                   => Verdict::error( sprintf( 'VirusTotal answered %d %s', $response->status, $response->error ) ),
 		};
 	}
@@ -108,24 +125,54 @@ final readonly class VirusTotal implements Scanner {
 	/**
 	 * What the last analysis said.
 	 *
+	 * Clean only when some engine looked: an analysis in which every engine
+	 * timed out, failed or could not read the type has no opinion, and is
+	 * unknown — not a pass.
+	 *
 	 * @since 1.0.0
 	 *
-	 * @param array $body    The /files/{id} answer.
-	 * @param int   $engines Engines that must agree.
+	 * @param array<mixed> $body    The /files/{id} answer.
+	 * @param int          $engines Engines that must agree.
 	 *
 	 * @return Verdict Infected with the suggested label and the vote count;
-	 *                 unknown when there is no analysis at all.
+	 *                 unknown when there is no analysis, or no engine judged.
 	 */
 	public static function judge( array $body, int $engines = self::ENGINES ): Verdict {
-		$stats = (array) ( $body['data']['attributes']['last_analysis_stats'] ?? array() );
-		$votes = (int) ( $stats['malicious'] ?? 0 );
+		$attributes = self::at( $body, 'data', 'attributes' );
+		$stats      = self::at( $attributes, 'last_analysis_stats' );
+		$count      = static fn ( string $key ): int => is_numeric( $stats[ $key ] ?? null ) ? max( 0, (int) $stats[ $key ] ) : 0;
+		$votes      = $count( 'malicious' );
 
 		if ( $votes >= max( 1, $engines ) ) {
-			$label = (string) ( $body['data']['attributes']['popular_threat_classification']['suggested_threat_label'] ?? '' );
+			$label = self::at( $attributes, 'popular_threat_classification' )['suggested_threat_label'] ?? '';
+			$label = is_string( $label ) ? $label : '';
 
 			return Verdict::infected( sprintf( '%s (%d engines on VirusTotal)', '' === $label ? 'malicious' : $label, $votes ) );
 		}
 
-		return array() === $stats ? Verdict::unknown( 'VirusTotal has no analysis of this file' ) : Verdict::clean();
+		if ( array() === $stats ) {
+			return Verdict::unknown( 'VirusTotal has no analysis of this file' );
+		}
+
+		$judged = $votes + $count( 'suspicious' ) + $count( 'undetected' ) + $count( 'harmless' );
+
+		return 0 === $judged ? Verdict::unknown( 'no engine on VirusTotal could judge this file' ) : Verdict::clean();
+	}
+
+	/**
+	 * The array at a path into decoded JSON, or an empty one.
+	 *
+	 * @param array<mixed> $json    Decoded JSON.
+	 * @param string       ...$path Keys, outermost first.
+	 *
+	 * @return array<mixed>
+	 */
+	private static function at( array $json, string ...$path ): array {
+		foreach ( $path as $key ) {
+			$next = $json[ $key ] ?? null;
+			$json = is_array( $next ) ? $next : array();
+		}
+
+		return $json;
 	}
 }
